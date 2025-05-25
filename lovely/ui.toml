@@ -1,0 +1,27 @@
+[manifest]
+version = "1.0.0"
+dump_lua = true
+priority = 0
+
+# [[patches]]
+# [patches.copy]
+# target = "main.lua"
+# position = "append"
+# sources = ["index.lua"]
+
+# [[patches]]
+# [patches.copy]
+# target = "main.lua"
+# position = "append"
+# sources = ["ui.lua"]
+
+[[patches]]
+[patches.pattern]
+target = "game.lua"
+pattern = '''love.graphics.setCanvas{self.CANVAS}'''
+position = "at"
+payload = '''
+love.graphics.setCanvas({self.CANVAS, stencil = true})
+'''
+match_indent = true
+overwrite = false
