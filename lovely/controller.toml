@@ -1,0 +1,15 @@
+[manifest]
+version = "1.0.0"
+dump_lua = true
+priority = 0
+
+[[patches]]
+[patches.pattern]
+target = "engine/controller.lua"
+pattern = '''if v:collides_with_point(cursor_trans) and not v.REMOVED then'''
+position = "at"
+payload = '''
+if v:collides_with_point(cursor_trans) and not v.REMOVED and v:inside_overflow_boundaries(cursor_trans) then
+'''
+match_indent = true
+overwrite = false
