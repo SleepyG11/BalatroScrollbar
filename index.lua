@@ -1,1 +1,3 @@
-function Node:inside_overflow_boundaries(point) end
+function Node:inside_overflow_boundaries(point)
+	return true
+end
