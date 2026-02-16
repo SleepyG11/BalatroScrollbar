@@ -7,6 +7,7 @@ function UIOverflowBox:init(args)
     self.content = UIBox({
         definition = args.definition or {},
 		config = {
+            align = "cm",
 			offset = { x = 0, y = 0 },
 		},
     })
