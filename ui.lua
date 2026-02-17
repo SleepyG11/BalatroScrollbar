@@ -1,33 +1,30 @@
-local ClipStack = Object:extend()
+local StencilStack = Object:extend()
 
-function ClipStack:new()
-	return setmetatable({
-		level = 0,
-		stack = {},
-	}, ClipStack)
-end
-function ClipStack:beginFrame()
+function StencilStack:new()
 	self.level = 0
 	self.stack = {}
-	love.graphics.clear(nil, nil, 0)
+end
+function StencilStack:prepare()
+	self.level = 0
+	self.stack = {}
 	love.graphics.setStencilTest()
 end
-function ClipStack:push(stencilFn)
+function StencilStack:push(stencil_fn)
 	local parent = self.level
 	local child = parent + 1
 
 	love.graphics.setStencilTest("equal", parent)
-
-	love.graphics.stencil(stencilFn, "increment", 1, true)
-
+	love.graphics.stencil(function()
+		stencil_fn(false)
+	end, "increment", 1, true)
 	love.graphics.setStencilTest("equal", child)
 
 	self.level = child
-	self.stack[#self.stack + 1] = stencilFn
+	self.stack[#self.stack + 1] = stencil_fn
 end
-function ClipStack:pop()
-	local stencilFn = self.stack[#self.stack]
-	if not stencilFn then
+function StencilStack:pop()
+	local stencil_fn = self.stack[#self.stack]
+	if not stencil_fn then
 		return
 	end
 
@@ -35,7 +32,9 @@ function ClipStack:pop()
 	local parent = child - 1
 
 	love.graphics.setStencilTest("equal", child)
-	love.graphics.stencil(stencilFn, "decrement", 1, true)
+	love.graphics.stencil(function()
+		stencil_fn(true)
+	end, "decrement", 1, true)
 
 	self.stack[#self.stack] = nil
 	self.level = parent
@@ -43,7 +42,7 @@ function ClipStack:pop()
 	love.graphics.setStencilTest("equal", parent)
 end
 
-local stack = ClipStack()
+local stack = StencilStack()
 
 -- Since element is not ready yet, use DebugPlus for developing it
 -- watch config_tab Mods/BalatroScrollbar/ui.lua
@@ -62,7 +61,7 @@ function UIOverflowBox:init(args)
 
 	args.definition = {
 		n = G.UIT.ROOT,
-		config = { colour = G.C.CLEAR },
+		config = { colour = G.C.CLEAR, r = args.config.r },
 		nodes = {
 			{
 				n = G.UIT.O,
@@ -105,13 +104,16 @@ function UIOverflowBox:draw(...)
 	end
 
 	if self.states.visible then
-		add_to_drawhash(self)
-		self.UIRoot:draw_self()
-		stack:push(function()
+		stack:push(function(exit)
+			local self = self.UIRoot
 			prep_draw(self, 1)
 			love.graphics.scale(1 / G.TILESIZE)
-			-- TODO: border-radius
-			love.graphics.rectangle("fill", 0, 0, self.VT.w * G.TILESIZE, self.VT.h * G.TILESIZE)
+			love.graphics.setColor(0, 0, 0, 1)
+			if self.config.r and self.VT.w > 0.01 then
+				self:draw_pixellated_rect("fill", 0)
+			else
+				love.graphics.rectangle("fill", 0, 0, self.VT.w * G.TILESIZE, self.VT.h * G.TILESIZE)
+			end
 			love.graphics.pop()
 		end)
 		self.UIRoot:draw_children()
@@ -163,7 +165,7 @@ if not G.love_draw_ref then
 end
 
 function love.draw(...)
-	stack:beginFrame()
+	stack:prepare()
 	G.love_draw_ref(...)
 end
 
@@ -196,6 +198,7 @@ function create_scrollbar(options)
 		config = {
 			h = options.h,
 			w = options.w,
+			r = options.r,
 		},
 	})
 	local scrollbar_overflow = UIOverflowBox({
@@ -260,10 +263,6 @@ function create_scrollbar(options)
 
 	return {
 		n = G.UIT.C,
-		config = {
-			outline = 1,
-			outline_colour = G.C.MULT,
-		},
 		nodes = {
 			{
 				n = G.UIT.R,
@@ -328,7 +327,6 @@ local inner_scrollbar = create_scrollbar({
 				config = {
 					minh = 1,
 					minw = 20,
-					r = 0.1,
 					colour = G.C.CHIPS,
 				},
 				nodes = {
@@ -359,11 +357,12 @@ return {
 	nodes = {
 		{
 			n = G.UIT.R,
-			config = { align = "cm", padding = 0.1, r = 0.1, colour = G.C.BLACK, minw = 3 },
+			config = { align = "cm", padding = 0.1, colour = G.C.BLACK, minw = 3 },
 			nodes = {
 				create_scrollbar({
 					h = 3,
 					w = 5,
+					r = 0.5,
 					definition = {
 						n = G.UIT.ROOT,
 						config = { colour = G.C.CLEAR, instance_type = "NODE" },
@@ -373,7 +372,6 @@ return {
 								config = {
 									minh = 1,
 									minw = 20,
-									r = 0.1,
 								},
 								nodes = {
 									{
