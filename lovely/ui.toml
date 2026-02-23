@@ -9,19 +9,49 @@ target = "main.lua"
 position = "append"
 sources = ["index.lua"]
 
-# [[patches]]
-# [patches.copy]
-# target = "main.lua"
-# position = "append"
-# sources = ["ui.lua"]
-
+# Allow use stencil in global canvas
 [[patches]]
 [patches.pattern]
 target = "game.lua"
 pattern = '''love.graphics.setCanvas{self.CANVAS}'''
 position = "at"
 payload = '''
-love.graphics.setCanvas({self.CANVAS, stencil = true})
+love.graphics.setCanvas{self.CANVAS, stencil = true}
+'''
+match_indent = true
+overwrite = false
+
+# Constrain container size in boundaries so content inside can overflow
+[[patches]]
+[patches.pattern]
+target = "engine/ui.lua"
+pattern = '''_nt.h = math.max(_ct.h + padding, _nt.h)-- '''
+position = "after"
+payload = '''
+if self:is(UIOverflowBox) and node == self.UIRoot then
+    if self.config.w then
+        _nt.w = self.config.w
+    elseif self.config.maxw then
+        _nt.w = math.min(_nt.w, self.config.maxw)
+    end
+    if self.config.h then
+        _nt.h = self.config.h
+    elseif self.config.maxh then
+        _nt.h = math.min(_nt.h, self.config.maxh)
+    end
+end
+'''
+match_indent = true
+overwrite = false
+
+# Add collision check
+[[patches]]
+[patches.pattern]
+target = "engine/controller.lua"
+pattern = '''if v:collides_with_point(cursor_trans) and not v.REMOVED then'''
+position = "at"
+payload = '''
+if v:collides_with_point(cursor_trans) and not v.REMOVED and v:inside_overflow_boundaries(cursor_trans) then
 '''
 match_indent = true
 overwrite = false

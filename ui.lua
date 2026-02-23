@@ -1,56 +1,8 @@
-local StencilStack = Object:extend()
+-- This element is custom which can be built over UIOverflowBox
+-- It will not be part of SMODS PR (probably)
 
-function StencilStack:new()
-	self.level = 0
-	self.stack = {}
-end
-function StencilStack:prepare()
-	self.level = 0
-	self.stack = {}
-	love.graphics.setStencilTest()
-end
-function StencilStack:push(stencil_fn)
-	local parent = self.level
-	local child = parent + 1
-
-	love.graphics.setStencilTest("equal", parent)
-	love.graphics.stencil(function()
-		stencil_fn(false)
-	end, "increment", 1, true)
-	love.graphics.setStencilTest("equal", child)
-
-	self.level = child
-	self.stack[#self.stack + 1] = stencil_fn
-end
-function StencilStack:pop()
-	local stencil_fn = self.stack[#self.stack]
-	if not stencil_fn then
-		return
-	end
-
-	local child = self.level
-	local parent = child - 1
-
-	love.graphics.setStencilTest("equal", child)
-	love.graphics.stencil(function()
-		stencil_fn(true)
-	end, "decrement", 1, true)
-
-	self.stack[#self.stack] = nil
-	self.level = parent
-
-	love.graphics.setStencilTest("equal", parent)
-end
-
-local stack = StencilStack()
-
--- Since element is not ready yet, use DebugPlus for developing it
--- watch config_tab Mods/BalatroScrollbar/ui.lua
-
-UIOverflowBox = UIBox:extend()
-
-function UIOverflowBox:init(args)
-	self.__id = args.id
+UIScrollBox = UIOverflowBox:extend()
+function UIScrollBox:init(args)
 	self.content = UIBox({
 		definition = args.definition or {},
 		config = {
@@ -72,101 +24,17 @@ function UIOverflowBox:init(args)
 		},
 	}
 
-	UIBox.init(self, args)
+	UIOverflowBox.init(self, args)
 
 	self.h_percent = 0
 	self.v_percent = 0
 end
-function UIOverflowBox:update(dt)
-	UIBox.update(self, dt)
+function UIScrollBox:update(dt)
+	UIOverflowBox.update(self, dt)
 	self.h_percent = math.max(0, math.min(1, self.h_percent))
 	self.v_percent = math.max(0, math.min(1, self.v_percent))
 	self.content.config.offset.x = -1 * (self.content.T.w - self.T.w) * self.h_percent
 	self.content.config.offset.y = -1 * (self.content.T.h - self.T.h) * self.v_percent
-end
-function UIOverflowBox:move(...)
-	if not self.FRAME then
-		print("NOT INITIALIZED", self.__id)
-	end
-	UIBox.move(self, ...)
-end
-function UIOverflowBox:draw(...)
-	-- UIBox.draw(self, ...)
-	if self.FRAME.DRAW >= G.FRAMES.DRAW and not G.OVERLAY_TUTORIAL then
-		return
-	end
-	self.FRAME.DRAW = G.FRAMES.DRAW
-
-	for k, v in pairs(self.children) do
-		if k ~= "h_popup" and k ~= "alert" then
-			v:draw()
-		end
-	end
-
-	if self.states.visible then
-		stack:push(function(exit)
-			local self = self.UIRoot
-			prep_draw(self, 1)
-			love.graphics.scale(1 / G.TILESIZE)
-			love.graphics.setColor(0, 0, 0, 1)
-			if self.config.r and self.VT.w > 0.01 then
-				self:draw_pixellated_rect("fill", 0)
-			else
-				love.graphics.rectangle("fill", 0, 0, self.VT.w * G.TILESIZE, self.VT.h * G.TILESIZE)
-			end
-			love.graphics.pop()
-		end)
-		self.UIRoot:draw_children()
-		for k, v in ipairs(self.draw_layers) do
-			if v.draw_self then
-				v:draw_self()
-			else
-				v:draw()
-			end
-			if v.draw_children then
-				v:draw_children()
-			end
-		end
-		stack:pop()
-	end
-
-	if self.children.alert then
-		self.children.alert:draw()
-	end
-
-	self:draw_boundingrect()
-end
--- TODO: fix maxh = h, maxw = w
-function UIOverflowBox:calculate_xywh(node, _T, recalculate, _scale)
-	local x, y = UIBox.calculate_xywh(self, node, _T, recalculate, _scale)
-	return self.config.w or math.min(x, self.config.maxw or math.huge),
-		self.config.h or math.max(y, self.config.maxh or math.huge)
-end
-
-function Node:inside_overflow_boundaries(point)
-	if self.overflow_check_timer == G.TIMERS.REAL then
-		return self.ARGS.overflow_check_result
-	end
-	self.overflow_check_timer = G.TIMERS.REAL
-	local element = self
-	while element.parent do
-		element = element.parent
-		if element:is(UIOverflowBox) and not Node.collides_with_point(element, point) then
-			self.ARGS.overflow_check_result = false
-			return false
-		end
-	end
-	self.ARGS.overflow_check_result = true
-	return true
-end
-
-if not G.love_draw_ref then
-	G.love_draw_ref = love.draw
-end
-
-function love.draw(...)
-	stack:prepare()
-	G.love_draw_ref(...)
 end
 
 --
@@ -192,16 +60,18 @@ end
 --
 
 function create_scrollbar(options)
-	local scrollbar_content = UIOverflowBox({
+	local scrollbar_content = UIScrollBox({
 		id = "inner",
 		definition = options.definition or {},
 		config = {
 			h = options.h,
 			w = options.w,
 			r = options.r,
+			maxw = options.maxw,
+			maxh = options.maxh,
 		},
 	})
-	local scrollbar_overflow = UIOverflowBox({
+	local scrollbar_overflow = UIScrollBox({
 		id = "outer",
 		definition = {
 			n = G.UIT.ROOT,
@@ -317,7 +187,7 @@ test_card_area:emplace(test_card)
 
 local inner_scrollbar = create_scrollbar({
 	h = 2,
-	w = 3,
+	maxw = 5,
 	definition = {
 		n = G.UIT.ROOT,
 		config = { colour = G.C.CLEAR, instance_type = "NODE" },
@@ -326,7 +196,7 @@ local inner_scrollbar = create_scrollbar({
 				n = G.UIT.R,
 				config = {
 					minh = 1,
-					minw = 20,
+					minw = 10,
 					colour = G.C.CHIPS,
 				},
 				nodes = {
@@ -360,9 +230,8 @@ return {
 			config = { align = "cm", padding = 0.1, colour = G.C.BLACK, minw = 3 },
 			nodes = {
 				create_scrollbar({
-					h = 3,
-					w = 5,
 					r = 0.5,
+					maxw = 10,
 					definition = {
 						n = G.UIT.ROOT,
 						config = { colour = G.C.CLEAR, instance_type = "NODE" },
@@ -371,7 +240,7 @@ return {
 								n = G.UIT.R,
 								config = {
 									minh = 1,
-									minw = 20,
+									minw = 11,
 								},
 								nodes = {
 									{
