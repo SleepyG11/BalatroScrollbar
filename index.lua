@@ -110,60 +110,68 @@ end
 -- So developer need render and handle controls for this element manually, if needed
 UIScrollBox = UIOverflowBox:extend()
 function UIScrollBox:init(args)
-	self.scroll_progress = { x = 0, y = 0 }
-	self.scroll_offset = { x = 0, y = 0 }
+	args.content = args.content or {}
+	args.container = args.container or {}
+	args.overflow = args.overflow or {}
 
-	self.content = UIBox(args)
-	self.content_container = UIBox({
-		definition = {
-			n = G.UIT.ROOT,
-			config = { colour = G.C.CLEAR },
-			nodes = {
-				{
-					n = G.UIT.O,
-					config = {
-						object = self.content,
-					},
+	self.scroll_args = args
+
+	self.scroll_progress = args.progress or { x = 0, y = 0 }
+	self.scroll_offset = args.offset or { x = 0, y = 0 }
+	self.scroll_sync_mode = args.sync_mode or "progress"
+
+	if args.content and args.content.is and args.content:is(Moveable) then
+		self.content = args.content
+	else
+		self.content = UIBox(args.content)
+	end
+
+	args.container.definition = {
+		n = G.UIT.ROOT,
+		config = { colour = G.C.CLEAR },
+		nodes = {
+			{
+				n = G.UIT.O,
+				config = {
+					object = self.content,
 				},
 			},
 		},
-		config = {
-			align = "cm",
-			offset = { x = 0, y = 0 },
-		},
-	})
+	}
+	args.container.config = args.container.config or {}
+	args.container.config.align = args.container.config.align or "cm"
+	args.container.config.offset = args.container.config.offset or { x = 0, y = 0 }
+	self.content_container = UIBox(args.container)
 
-	args.scroll_config = args.scroll_config or {}
-	self.scroll_progress = args.scroll_config.progress or {}
-
-	UIOverflowBox.init(self, {
-		definition = {
-			n = G.UIT.ROOT,
-			config = { colour = G.C.CLEAR },
-			nodes = {
-				{
-					n = G.UIT.O,
-					config = {
-						object = self.content_container,
-					},
+	args.overflow.definition = {
+		n = G.UIT.ROOT,
+		config = { colour = G.C.CLEAR },
+		nodes = {
+			{
+				n = G.UIT.O,
+				config = {
+					object = self.content_container,
 				},
 			},
 		},
-		config = args.overflow_config or {},
-	})
+	}
+	args.overflow.config = args.overflow.config or {}
+	UIOverflowBox.init(self, args.overflow)
+
+	self:sync_scroll(0, true)
 end
 -- Returns distance content overflows in both directions
 function UIScrollBox:get_scroll_distance()
 	return math.max(0, self.content_container.T.w - self.T.w), math.max(0, self.content_container.T.h - self.T.h)
 end
 -- Update offset to match progress
-function UIScrollBox:update_scroll_offset()
+function UIScrollBox:sync_scroll_offset()
 	local dx, dy = self:get_scroll_distance()
 	self.scroll_offset.x = dx * (self.scroll_progress.x or 0)
 	self.scroll_offset.y = dy * (self.scroll_progress.y or 0)
 end
 -- Update progress to match offset
-function UIScrollBox:update_scroll_progress()
+function UIScrollBox:sync_scroll_progress()
 	local dx, dy = self:get_scroll_distance()
 	self.scroll_progress.x = (dx == 0 and 0) or ((self.offset.x or 0) / dx)
 	self.scroll_progress.y = (dy == 0 and 0) or ((self.offset.y or 0) / dy)
@@ -171,22 +179,30 @@ end
 -- Set new value for offset table
 function UIScrollBox:set_scroll_offset(t)
 	self.scroll_offset = t or {}
-	self:update_scroll_progress()
+	self:sync_scroll_progress()
 end
 -- Set new value for progress table
 function UIScrollBox:set_scroll_progress(t)
 	self.scroll_progress = t or {}
-	self:update_scroll_offset()
+	self:sync_scroll_offset()
 end
--- Update offset according to progress and set offset every frame
-function UIScrollBox:update_scroll()
-	self:update_scroll_offset()
+-- Sync things
+function UIScrollBox:sync_scroll(dt, init)
+	if self.scroll_sync_mode == "none" then
+	elseif self.scroll_sync_mode == "offset" then
+		self:sync_scroll_progress()
+	else
+		self:sync_scroll_offset()
+	end
 	self.content_container.config.offset.x = -(self.scroll_offset.x or 0)
 	self.content_container.config.offset.y = -(self.scroll_offset.y or 0)
 end
 
 function UIScrollBox:update(dt)
-	self:update_scroll()
+	if self.scroll_args.scroll_move then
+		self.scroll_args.scroll_move(self, dt)
+	end
+	self:sync_scroll(dt)
 	UIOverflowBox.update(self, dt)
 end
 
